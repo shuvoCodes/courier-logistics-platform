@@ -27,4 +27,7 @@ typing-inspection==0.4.4
 typing_extensions==4.16.0
 uvicorn==0.52.4
 psycopg2-binary
+<<<<<<< HEAD
 email-validator==2.3.0
+=======
+>>>>>>> 3cb1cb5b554aeb6a6379f1db1aaeb09d8db97f8b
