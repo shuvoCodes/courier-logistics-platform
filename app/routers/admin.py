@@ -213,7 +213,7 @@ def update_user_status(user : user_dependency, db : db_dependency, user_id : int
 
 
 
-@router.post("/reset-password")
+@route.post("/reset-password")
 def reset_password(data: ResetPasswordRequest, db: Session = Depends(get_db)):
     try:
         payload = decode_token(data.token)
