@@ -39,9 +39,6 @@ class UpdateRole(BaseModel):
 class UpdateStatus(BaseModel):
     is_active : bool
 
-class ResetPasswordRequest(BaseModel):
-    token: str
-    new_password: str = Field(min_length=8, max_length=128)
 
 
 def get_db():
@@ -211,19 +208,3 @@ def update_user_status(user : user_dependency, db : db_dependency, user_id : int
 
     return JSONResponse(status_code= 200, content= {'message' : 'User Status Updated Sucessfully.'})
 
-
-
-@route.post("/reset-password")
-def reset_password(data: ResetPasswordRequest, db: Session = Depends(get_db)):
-    try:
-        payload = decode_token(data.token)
-        if payload.get("type") != "password_reset":
-            raise HTTPException(400, "Invalid reset token")
-        user = db.query(User).filter(User.id == payload.get("id")).first()
-        if not user:
-            raise HTTPException(404, "User not found")
-        user.hashed_password = hash_password(data.new_password)
-        db.commit()
-        return {"message": "Password reset successful"}
-    except JWTError:
-        raise HTTPException(status_code=400, detail={"Invalid or expired reset token"})
