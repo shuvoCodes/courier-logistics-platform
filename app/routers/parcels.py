@@ -125,6 +125,19 @@ def list_parcels(db: db_dependancy,user: user_dependancy,search: str = Query(Non
         "items": items
     }
 
+@router.get("/{parcel_id}")
+def get_parcel(parcel_id: int,db: db_dependancy,user: user_dependancy):
+    parcel = db.query(Parcel).filter(Parcel.id == parcel_id).first()
+
+    if parcel is None:
+        raise HTTPException(status_code=404,detail="Parcel not found")
+
+    # Normal user can only see own parcel
+    if (user.get("role") != "admin"and parcel.sender_id != user.get("id")):
+        raise HTTPException(status_code=403,detail="Not allowed")
+
+    return parcel
+
 @router.put("/update/{parcel_id}")
 def update_parcel(parcel_id: int, data: ParcelUpdate, db: db_dependancy, user: user_dependancy):
 
