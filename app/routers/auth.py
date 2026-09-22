@@ -15,7 +15,7 @@ import secrets
 route = APIRouter(prefix='/Auth', tags=['Authentication'])
 
 bcrypt_context = CryptContext(schemes= ['bcrypt'], deprecated = 'auto')
-OAuth2_bearer = OAuth2PasswordBearer(tokenUrl= 'login')
+OAuth2_bearer = OAuth2PasswordBearer(tokenUrl='/Auth/login')
 
 SCERET_KEY = '5bb7def1ea99e60cba3ae25ca6fb31d701091d833b9d5b7bdd0c14c9e591cfc4'
 ALGORITHM = 'HS256'
