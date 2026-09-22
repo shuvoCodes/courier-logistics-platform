@@ -79,16 +79,32 @@ def create_user(user : user_dependency, db : db_dependency, new_user : CreateUse
     return JSONResponse(status_code= 201, content= {'message' : 'User Created Sucessfully.'})
 
 @route.get("/users")
-def list_users(user: user_dependency,db: db_dependency,search: str = Query(None),role: str = Query(None),
-    is_active: bool = Query(None),sort_by: str = Query("create_at"),sort_order: str = Query("desc"),
-    page: int = Query(1, ge=1),page_size: int = Query(10, ge=1, le=100)):
+def list_users(
+    user: user_dependency,
+    db: db_dependency,
+    search: str = Query(None),
+    role: str = Query(None),
+    is_active: bool = Query(None),
+    sort_by: str = Query("create_at"),
+    sort_order: str = Query("desc"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(10, ge=1, le=100)
+):
 
     require_roles(user, "admin")
 
     query = db.query(Users)
 
     if search:
-        query = query.filter(Users.username.contains(search))
+        if search.isdigit():
+            query = query.filter(Users.id == int(search))
+        else:
+            query = query.filter(
+                Users.username.contains(search)
+                | Users.fastname.contains(search)
+                | Users.lastname.contains(search)
+                | Users.email.contains(search)
+            )
 
     if role:
         query = query.filter(Users.role == role)
@@ -106,7 +122,10 @@ def list_users(user: user_dependency,db: db_dependency,search: str = Query(None)
         column = Users.create_at
 
     else:
-        return JSONResponse(status_code=404,content={"message": f"Invalid sort_by: {sort_by}"})
+        return JSONResponse(
+            status_code=404,
+            content={"message": f"Invalid sort_by: {sort_by}"}
+        )
 
     if sort_order == "asc":
         query = query.order_by(asc(column))
@@ -115,7 +134,10 @@ def list_users(user: user_dependency,db: db_dependency,search: str = Query(None)
         query = query.order_by(desc(column))
 
     else:
-        return JSONResponse(status_code=404,content={"message": f"Invalid sort_order: {sort_order}"})
+        return JSONResponse(
+            status_code=404,
+            content={"message": f"Invalid sort_order: {sort_order}"}
+        )
 
     total_items = query.count()
 
@@ -136,17 +158,6 @@ def list_users(user: user_dependency,db: db_dependency,search: str = Query(None)
 # GET /users?page=1&page_size=20
 # GET /users?page=2&page_size=10
 # GET /users?search=shuvo&role=admin&is_active=true&page=1&page_size=5&sort_by=username&sort_order=asc
-
-
-@route.get('/users/{user_id}')
-def get_user_by_id(user : user_dependency, db : db_dependency, user_id : int):
-    require_roles(user, 'admin')
-
-    find = db.query(Users).filter(Users.id == user_id).first()
-    if find is None:
-        raise HTTPException(status_code= 404, detail= 'User Not Found.')
-
-    return find
 
 
 @route.put('/users/{user_id}/update')
