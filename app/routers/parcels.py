@@ -59,19 +59,7 @@ def create_parcel(db: db_dependancy, user: user_dependancy, data: ParcelCreate):
     db.refresh(parcel)
     return JSONResponse(status_code=201 ,content={"message": 'Parcel Create Sucessfully'})
 
-@router.get('/all')
-def get_all_parcels(user: user_dependancy, db: db_dependancy):
-    if user is None:
-            raise HTTPException(status_code=401, detail='Failed Authentication')
-
-    query = db.query(Parcel)
-    if user.get('role') == 'admin':
-        return query.all()
-    else: 
-        return query.filter(Parcel.sender_id == user.get('id')).all()
-
-    
-@router.get("/search")
+ @router.get("/search")
 def list_parcels(db: db_dependancy,user: user_dependancy,search: str = Query(None),status: str = Query(None),category: str = Query(None),
     date_from: datetime = Query(None),date_to: datetime = Query(None),sort: str = Query("newest",description="Sort based on newest, oldest, alphabetical and price"),
     page: int = Query(1, ge=1),page_size: int = Query(10, ge=1, le=100)):
@@ -136,23 +124,6 @@ def list_parcels(db: db_dependancy,user: user_dependancy,search: str = Query(Non
         "total_pages": total_pages,
         "items": items
     }
-
-
-
-@router.get("/search/{parcel_id}")
-def get_parcel(parcel_id: int, db: db_dependancy, user: user_dependancy):
-    if user is None:
-                raise HTTPException(status_code=401, detail='Failed Authentication')
-
-    parcel = db.query(Parcel).filter(Parcel.id == parcel_id).first()
-
-    if parcel is None:
-        raise HTTPException(status_code=404, detail="Parcel not found")
-    
-    if user.get('role') != "admin" and parcel.sender_id != user.get('id'):
-        raise HTTPException(status_code=403, detail="Not allowed")
-    
-    return parcel
 
 @router.put("/update/{parcel_id}")
 def update_parcel(parcel_id: int, data: ParcelUpdate, db: db_dependancy, user: user_dependancy):
