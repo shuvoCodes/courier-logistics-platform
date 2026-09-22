@@ -22,7 +22,6 @@ class ParcelCreate(BaseModel):
     delivery_address: str = Field("Janata Branch")
     category: str = Field("Books")
     weight: float = Field(gt=0)
-    delivery_fee: float = Field(ge=0)
 
 
 class ParcelUpdate(BaseModel):
@@ -51,6 +50,7 @@ user_dependancy = Annotated[dict,Depends(get_current_user)]
 def create_parcel(db: db_dependancy, user: user_dependancy, data: ParcelCreate):
     parcel = Parcel(
         **data.model_dump(),
+        delivery_fee = data.weight * 60,
         tracking_number = f"CR-{secrets.token_hex(5).upper()}",
         sender_id=user.get('id')
     )
