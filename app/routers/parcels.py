@@ -59,7 +59,7 @@ def create_parcel(db: db_dependancy, user: user_dependancy, data: ParcelCreate):
     db.refresh(parcel)
     return JSONResponse(status_code=201 ,content={"message": 'Parcel Create Sucessfully'})
 
- @router.get("/search")
+@router.get("/search")
 def list_parcels(db: db_dependancy,user: user_dependancy,search: str = Query(None),status: str = Query(None),category: str = Query(None),
     date_from: datetime = Query(None),date_to: datetime = Query(None),sort: str = Query("newest",description="Sort based on newest, oldest, alphabetical and price"),
     page: int = Query(1, ge=1),page_size: int = Query(10, ge=1, le=100)):
