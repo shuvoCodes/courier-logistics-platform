@@ -37,13 +37,14 @@ user_dependancy = Annotated[dict,Depends(get_current_user)]
 @router.post("/{parcel_id}")
 def add_tracking(db: db_dependancy, user: user_dependancy,parcel_id: int, data: TrackingCreate):
 
+    if user.role != "admin" :
+        raise HTTPException(403, "Not allowed")
+    
     parcel = db.query(Parcel).filter(Parcel.id == parcel_id).first()
 
     if not parcel:
         raise HTTPException(404, "Parcel not found")
     
-    if user.role != "admin" and parcel.sender_id != user.id:
-        raise HTTPException(403, "Not allowed")
     
     parcel.status = data.status
     item = Tracking(parcel_id=parcel_id, **data.model_dump())
@@ -62,5 +63,9 @@ def get_tracking(db: db_dependancy, user: user_dependancy,parcel_id: int):
     
     if user.role != "admin" and parcel.sender_id != user.id:
         raise HTTPException(403, "Not allowed")
-    
-    return db.query(Tracking).filter(Tracking.parcel_id == parcel_id).all()
+
+    if user.role == 'admin':
+        return db.query(Tracking).filter(Tracking.parcel_id == parcel_id).all()
+    else:
+        return db.query(Tracking).join(Parcel, Tracking.parcel_id == Parcel.id).filter(
+            Tracking.parcel_id == parcel_id,Parcel.sender_id == user.id).all()
