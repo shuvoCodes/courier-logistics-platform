@@ -57,7 +57,7 @@ def create_parcel(db: db_dependancy, user: user_dependancy, data: ParcelCreate):
     db.add(parcel)
     db.commit()
     db.refresh(parcel)
-    return parcel
+    return JSONResponse(status_code=201 ,content={"message": 'Parcel Create Sucessfully'})
 
 @router.get('/all')
 def get_all_parcels(user: user_dependancy, db: db_dependancy):
@@ -65,7 +65,7 @@ def get_all_parcels(user: user_dependancy, db: db_dependancy):
             raise HTTPException(status_code=401, detail='Failed Authentication')
 
     query = db.query(Parcel)
-    if user.role == 'admin':
+    if user.get('role') == 'admin':
         return query.all()
     else: 
         return query.filter(Parcel.sender_id == user.get('id')).all()
@@ -78,7 +78,7 @@ def list_parcels(db: db_dependancy,user: user_dependancy,search: str = Query(Non
 
     query = db.query(Parcel)
 
-    if user.role != "admin":
+    if user.get('role') != "admin":
         query = query.filter(Parcel.sender_id == user.get('id'))
 
     if search:
@@ -149,7 +149,7 @@ def get_parcel(parcel_id: int, db: db_dependancy, user: user_dependancy):
     if parcel is None:
         raise HTTPException(status_code=404, detail="Parcel not found")
     
-    if user.role != "admin" and parcel.sender_id != user.get('id'):
+    if user.get('role') != "admin" and parcel.sender_id != user.get('id'):
         raise HTTPException(status_code=403, detail="Not allowed")
     
     return parcel
@@ -161,7 +161,7 @@ def update_parcel(parcel_id: int, data: ParcelUpdate, db: db_dependancy, user: u
     if parcel is None:
         raise HTTPException(status_code=404, detail="Parcel not found")
     
-    if user.role != "admin" and parcel.sender_id != user.get('id'):
+    if user.get('role') != "admin" and parcel.sender_id != user.get('id'):
         raise HTTPException(status_code=403, detail="Not allowed")
     
     for key, value in data.model_dump(exclude_unset=True).items():
@@ -178,7 +178,7 @@ def delete_parcel(db: db_dependancy, user:user_dependancy,parcel_id: int):
     if parcel is None:
         raise HTTPException(status_code=404, detail="Parcel not found")
     
-    if user.role != "admin" and parcel.sender_id != user.get('id'):
+    if user.get('role') != "admin" and parcel.sender_id != user.get('id'):
         raise HTTPException(status_code=403, detail="Not allowed")
     
     db.delete(parcel)
