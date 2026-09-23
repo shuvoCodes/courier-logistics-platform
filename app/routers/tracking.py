@@ -79,4 +79,10 @@ def get_tracking(db: db_dependancy,tracking_number: str):
     if not parcel:
         raise HTTPException(status_code=404, detail="Parcel not found")
     
-    return db.query(Tracking).filter(Tracking.parcel_id == parcel.id).first()
+    track = db.query(Tracking).filter(Tracking.parcel_id == parcel.id).first()
+
+    if not track:
+        raise HTTPException(status_code=404, detail="Track not found")
+
+    return track
+    
