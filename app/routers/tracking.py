@@ -71,8 +71,8 @@ def get_tracking(db: db_dependancy, user: user_dependancy,parcel_id: int):
             Tracking.parcel_id == parcel_id,Parcel.sender_id == user.get('id')).all()
 
 
-@router.get("/{tracking_id}/get")
-def get_tracking(db: db_dependancy,tracking_id: int):
+@router.get("/{tracking_number}/get")
+def get_tracking(db: db_dependancy,tracking_number: str):
 
     parcel = db.query(Parcel).filter(Parcel.tracking_number == tracking_id).first()
 
