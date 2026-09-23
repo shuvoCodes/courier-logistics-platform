@@ -74,7 +74,7 @@ def get_tracking(db: db_dependancy, user: user_dependancy,parcel_id: int):
 @router.get("/{tracking_number}/get")
 def get_tracking(db: db_dependancy,tracking_number: str):
 
-    parcel = db.query(Parcel).filter(Parcel.tracking_number == tracking_id).first()
+    parcel = db.query(Parcel).filter(Parcel.tracking_number == tracking_number).first()
 
     if not parcel:
         raise HTTPException(status_code=404, detail="Parcel not found")
