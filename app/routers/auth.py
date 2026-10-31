@@ -1,111 +1,115 @@
-from app.database import SessionLocal
-from datetime import timedelta, datetime, timezone
-from fastapi import FastAPI,APIRouter,Depends,HTTPException
-from fastapi.responses import JSONResponse
-from fastapi.security import OAuth2PasswordRequestForm,OAuth2PasswordBearer
-from app.models import Users
-from pydantic import BaseModel, Field,EmailStr
-from passlib.context import CryptContext
-from sqlalchemy.orm import Session
-from typing import Annotated,Optional
-from jose import jwt, JWTError
+from datetime import datetime, timedelta, timezone
 import secrets
+from typing import Annotated, Optional
 
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import JSONResponse
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from jose import JWTError, jwt
+from passlib.context import CryptContext
+from pydantic import BaseModel, EmailStr, Field
+from sqlalchemy.orm import Session
 
-route = APIRouter(prefix='/Auth', tags=['Authentication'])
+from app.database import SessionLocal
+from app.models import Users
 
-bcrypt_context = CryptContext(schemes= ['bcrypt'], deprecated = 'auto')
-OAuth2_bearer = OAuth2PasswordBearer(tokenUrl='/Auth/login')
+route = APIRouter(prefix="/Auth", tags=["Authentication"])
 
-SCERET_KEY = '5bb7def1ea99e60cba3ae25ca6fb31d701091d833b9d5b7bdd0c14c9e591cfc4'
-ALGORITHM = 'HS256'
+bcrypt_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+oauth2_bearer = OAuth2PasswordBearer(tokenUrl="login")
+
+SECRET_KEY = "5bb7def1ea99e60cba3ae25ca6fb31d701091d833b9d5b7bdd0c14c9e591cfc4"
+ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 REFRESH_TOKEN_EXPIRE_DAYS = 7
 RESET_TOKEN_EXPIRE_MINUTES = 15
+VALID_ROLES = {"customer", "staff", "admin", "agent"}
 
 
 class CreateUser(BaseModel):
-    email : EmailStr
+    email: EmailStr
     username: str
     fastname: str
     lastname: str
-    phone : Optional[str] = Field(default= None,example = "01XXXXXXXX")
+    phone: Optional[str] = Field(default=None, example="01XXXXXXXX")
     password: str
-    role : Optional[str] = Field(default= 'customer')
+    role: Optional[str] = Field(default="customer")
+
 
 class UpdateUser(BaseModel):
-    email : Optional[EmailStr] = Field (default= None)
-    username: Optional[str] = Field (default= None)
-    fastname: Optional[str] = Field (default= None)
-    lastname: Optional[str] = Field (default= None)
-    phone : Optional[str] = Field (default= None)
+    email: Optional[EmailStr] = Field(default=None)
+    username: Optional[str] = Field(default=None)
+    fastname: Optional[str] = Field(default=None)
+    lastname: Optional[str] = Field(default=None)
+    phone: Optional[str] = Field(default=None)
+
 
 class UpdatePassword(BaseModel):
-    current_password : str
-    new_password : str
+    current_password: str
+    new_password: str
+
 
 class RefreshRequest(BaseModel):
-    refresh_token : str
+    refresh_token: str
+
 
 class ForgotPassword(BaseModel):
-    email : str
-
-class ResetPasswordRequest(BaseModel):
-    token: str
-    new_password: str = Field(min_length=8, max_length=128)
+    email: str
 
 
-
-def authenticate_user(username,password,db):
+def authenticate_user(username: str, password: str, db: Session):
     user = db.query(Users).filter(Users.username == username).first()
     if user is None:
         return False
-    if not bcrypt_context.verify(password,user.hash_password):
+    if not bcrypt_context.verify(password, user.hash_password):
         return False
     return user
 
-def create_access_token(username: str, user_id: int, role:str, expires_delta = timedelta(minutes= ACCESS_TOKEN_EXPIRE_MINUTES)):
-    encode = {
-        'sub' : username,
-        'id' : user_id,
-        'role' : role,
-        'type' : 'access'
-    }
-    expire = datetime.now(timezone.utc) + expires_delta
-    encode.update({'exp':expire})
-    return jwt.encode(encode, SCERET_KEY, algorithm= ALGORITHM)
 
-def create_refresh_token(username: str, user_id: int, role:str, expires_delta = timedelta(days= REFRESH_TOKEN_EXPIRE_DAYS)):
-    encode = {
-        'sub' : username,
-        'id' : user_id,
-        'role' : role,
-        'type' : 'refresh'
+def create_access_token(username: str, user_id: int, role: str, expires_delta: Optional[timedelta] = None):
+    payload = {
+        "sub": username,
+        "id": user_id,
+        "role": role,
+        "type": "access",
     }
-    expire = datetime.now(timezone.utc) + expires_delta
-    encode.update({'exp':expire})
-    return jwt.encode(encode, SCERET_KEY, algorithm= ALGORITHM)
+    expire = datetime.now(timezone.utc) + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
+    payload["exp"] = expire
+    return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
-def get_current_user(token: Annotated[str, Depends(OAuth2_bearer)]):
+
+def create_refresh_token(username: str, user_id: int, role: str, expires_delta: Optional[timedelta] = None):
+    payload = {
+        "sub": username,
+        "id": user_id,
+        "role": role,
+        "type": "refresh",
+    }
+    expire = datetime.now(timezone.utc) + (expires_delta or timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS))
+    payload["exp"] = expire
+    return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+
+
+def get_current_user(token: Annotated[str, Depends(oauth2_bearer)]):
     try:
-        pyload = jwt.decode(token, SCERET_KEY, algorithms= ALGORITHM)
-        username: str = pyload.get('sub')
-        user_id : int = pyload.get('id')
-        role : str = pyload.get('role')
-        token_type : str = pyload.get('type')
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    except JWTError as exc:
+        raise HTTPException(status_code=401, detail="Failed Authentication.") from exc
 
-        if username is None or user_id is None or token_type != 'access':
-            raise HTTPException(status_code= 401, detail= 'Failed Authentication.')
-        
-        return {'username' : username, 'id' : user_id, 'role' : role}
-    
-    except JWTError:
-        raise HTTPException(status_code= 401, detail= 'Failed Authentication.')
+    username: str | None = payload.get("sub")
+    user_id: int | None = payload.get("id")
+    role: str | None = payload.get("role")
+    token_type: str | None = payload.get("type")
+
+    if username is None or user_id is None or token_type != "access":
+        raise HTTPException(status_code=401, detail="Failed Authentication.")
+
+    return {"username": username, "id": user_id, "role": role}
 
 
-def require_roles(user, *roles):
-    if user is None or user.get('role') not in roles:
-        raise HTTPException(status_code= 403, detail= 'Not enough permission.')
+def require_roles(user: Optional[dict], *roles):
+    if user is None or user.get("role") not in roles:
+        raise HTTPException(status_code=403, detail="Not enough permission.")
 
 
 def get_db():
@@ -115,185 +119,179 @@ def get_db():
     finally:
         db.close()
 
-db_dependancey = Annotated[Session,Depends(get_db)]
-user_dependancey = Annotated[Session, Depends(get_current_user)]
+
+db_dependency = Annotated[Session, Depends(get_db)]
+user_dependency = Annotated[dict, Depends(get_current_user)]
 
 
-@route.post('/register')
-def register(db : db_dependancey, new_user: CreateUser):
-
-    exist = db.query(Users).filter(
+@route.post("/register")
+def register(db: db_dependency, new_user: CreateUser):
+    existing_user = db.query(Users).filter(
         (Users.email == new_user.email) | (Users.username == new_user.username)
     ).first()
-    if exist is not None:
-        raise HTTPException(status_code= 400, detail= 'Email or Username already registered.')
+    if existing_user is not None:
+        raise HTTPException(status_code=400, detail="Email or Username already registered.")
 
+    user_role = new_user.role if new_user.role in VALID_ROLES else "customer"
     user_model = Users(
-        email = new_user.email,
-        username = new_user.username,
-        fastname= new_user.fastname,
-        lastname = new_user.lastname,
-        phone = new_user.phone,
-        hash_password = bcrypt_context.hash(new_user.password),
-        is_active = True,
-        role = new_user.role if new_user.role in ['customer','staff','admin','agent'] else 'customer'
+        email=new_user.email,
+        username=new_user.username,
+        fastname=new_user.fastname,
+        lastname=new_user.lastname,
+        phone=new_user.phone,
+        hash_password=bcrypt_context.hash(new_user.password),
+        is_active=True,
+        role=user_role,
     )
     db.add(user_model)
     db.commit()
 
-    return JSONResponse(status_code= 201, content= {'Message' : 'User Registered Sucessfully.'})
+    return JSONResponse(status_code=201, content={"Message": "User Registered Successfully."})
 
 
-@route.post('/login')
-def login(db: db_dependancey, from_data: Annotated[OAuth2PasswordRequestForm,Depends()]):
-    user = authenticate_user(from_data.username, from_data.password,db)
+@route.post("/login")
+def login(db: db_dependency, form_data: Annotated[OAuth2PasswordRequestForm, Depends()]):
+    user = authenticate_user(form_data.username, form_data.password, db)
 
     if not user:
-        raise HTTPException(status_code= 401, detail= 'Failed Authentication.')
+        raise HTTPException(status_code=401, detail="Failed Authentication.")
 
     if not user.is_active:
-        raise HTTPException(status_code= 401, detail= 'Account is inactive.')
+        raise HTTPException(status_code=401, detail="Account is inactive.")
 
-    access_token = create_access_token(user.username,user.id,user.role)
-    refresh_token = create_refresh_token(user.username,user.id,user.role)
+    access_token = create_access_token(user.username, user.id, user.role)
+    refresh_token = create_refresh_token(user.username, user.id, user.role)
 
     return {
-        'access_token' : access_token,
-        'refresh_token' : refresh_token,
-        'token_type' : 'bearer'
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer",
     }
 
 
-@route.post('/refresh')
-def refresh(db: db_dependancey, body : RefreshRequest):
+@route.post("/refresh")
+def refresh(db: db_dependency, body: RefreshRequest):
     try:
-        pyload = jwt.decode(body.refresh_token, SCERET_KEY, algorithms= ALGORITHM)
-        if pyload.get('type') != 'refresh':
-            raise HTTPException(status_code= 401, detail= 'Invalid Refresh Token.')
+        payload = jwt.decode(body.refresh_token, SECRET_KEY, algorithms=[ALGORITHM])
+        if payload.get("type") != "refresh":
+            raise HTTPException(status_code=401, detail="Invalid Refresh Token.")
 
-        user = db.query(Users).filter(Users.id == pyload.get('id')).first()
+        user = db.query(Users).filter(Users.id == payload.get("id")).first()
         if user is None:
-            raise HTTPException(status_code= 401, detail= 'Invalid Refresh Token.')
+            raise HTTPException(status_code=401, detail="Invalid Refresh Token.")
 
-        access_token = create_access_token(user.username,user.id,user.role)
-        return {'access_token' : access_token, 'token_type' : 'bearer'}
-    except JWTError:
-        raise HTTPException(status_code= 401, detail= 'Invalid Refresh Token.')
+        access_token = create_access_token(user.username, user.id, user.role)
+        return {"access_token": access_token, "token_type": "bearer"}
+    except JWTError as exc:
+        raise HTTPException(status_code=401, detail="Invalid Refresh Token.") from exc
 
 
-@route.post('/logout')
-def logout(user : user_dependancey):
+@route.post("/logout")
+def logout(user: user_dependency):
     if user is None:
-        raise HTTPException(status_code= 401, detail= 'Failed Authentication.')
-    return JSONResponse(status_code= 200, content= {'message' : 'Logged out Sucessfully.'})
+        raise HTTPException(status_code=401, detail="Failed Authentication.")
+    return JSONResponse(status_code=200, content={"message": "Logged out Successfully."})
 
 
-@route.get('/me')
-def get_user(user: user_dependancey ,db: db_dependancey):
+@route.get("/me")
+def get_user(user: user_dependency, db: db_dependency):
     if user is None:
-        raise HTTPException(status_code=401, detail='Failed Authentication')
+        raise HTTPException(status_code=401, detail="Failed Authentication")
 
-    curret_user = db.query(Users).filter(Users.id == user.get('id')).first()
-
-    if curret_user is None:
-        raise HTTPException(status_code=404, detail='User Not Found')
+    current_user = db.query(Users).filter(Users.id == user.get("id")).first()
+    if current_user is None:
+        raise HTTPException(status_code=404, detail="User Not Found")
 
     return {
-        'id' : curret_user.id,
-        'email' : curret_user.email,
-        'username'  : curret_user.username,
-        'fastname'  : curret_user.fastname,
-        'lastname'  : curret_user.lastname,
-        'phone' : curret_user.phone,
-        'is_active'  : curret_user.is_active,
-        'role'  : curret_user.role
+        "id": current_user.id,
+        "email": current_user.email,
+        "username": current_user.username,
+        "fastname": current_user.fastname,
+        "lastname": current_user.lastname,
+        "phone": current_user.phone,
+        "is_active": current_user.is_active,
+        "role": current_user.role,
     }
 
 
-@route.put('/update/me')
-def update_me(user: user_dependancey,db: db_dependancey, update_info: UpdateUser):
+@route.put("/update/me")
+def update_me(user: user_dependency, db: db_dependency, update_info: UpdateUser):
     if user is None:
-        raise HTTPException(status_code= 401, detail='Failed Authentication')
+        raise HTTPException(status_code=401, detail="Failed Authentication")
 
-    find = db.query(Users).filter(Users.id == user.get('id')).first()
-    update = update_info.model_dump(exclude_unset= True)
+    find = db.query(Users).filter(Users.id == user.get("id")).first()
+    update = update_info.model_dump(exclude_unset=True)
 
-    for key,value in update.items():
-        setattr(find,key, value)
+    for key, value in update.items():
+        setattr(find, key, value)
 
     db.commit()
-    return JSONResponse(status_code= 200, content={'message' : 'Profile Updated Successfully'})
+    return JSONResponse(status_code=200, content={"message": "Profile Updated Successfully"})
 
 
-@route.delete('/me/delete')
-def delete_user(db: db_dependancey, user: user_dependancey):
+@route.delete("/me/delete")
+def delete_user(db: db_dependency, user: user_dependency):
     if user is None:
-        raise HTTPException(status_code= 404, detail="Failed Authentication")
-    
-    find = db.query(Users).filter(Users.id == user.get('id')).first()
-    
-    if find is None:
-        raise HTTPException(status_code= 404, detail="User Not Found")
-    db.query(Users).filter(Users.id == user.get('id')).delete()
+        raise HTTPException(status_code=404, detail="Failed Authentication")
 
+    find = db.query(Users).filter(Users.id == user.get("id")).first()
+    if find is None:
+        raise HTTPException(status_code=404, detail="User Not Found")
+
+    db.query(Users).filter(Users.id == user.get("id")).delete()
     db.commit()
-    return JSONResponse(status_code=200, content={'message': 'Id Deletion Seccssfull.'})
+    return JSONResponse(status_code=200, content={"message": "Id Deletion Successful."})
 
-@route.put('/me/deactivate')
-def deactivate_acount(db: db_dependancey,user: user_dependancey):
+
+@route.put("/me/deactivate")
+def deactivate_account(db: db_dependency, user: user_dependency):
     if user is None:
-        raise HTTPException(status_code= 404, detail="Failed Authentication")
-        
-    find = db.query(Users).filter(Users.id == user.get('id')).first()
-        
+        raise HTTPException(status_code=404, detail="Failed Authentication")
+
+    find = db.query(Users).filter(Users.id == user.get("id")).first()
     if find is None:
-        raise HTTPException(status_code= 404, detail="User Not Found")
+        raise HTTPException(status_code=404, detail="User Not Found")
+
     find.is_active = False
-
     db.commit()
-    return JSONResponse(status_code=200, content={'message': 'User Deactivated Sucessfully'})
+    return JSONResponse(status_code=200, content={"message": "User Deactivated Successfully"})
 
-@route.post('/change-password')
-def update_password(user: user_dependancey, db : db_dependancey, update_pass : UpdatePassword):
+
+@route.post("/change-password")
+def update_password(user: user_dependency, db: db_dependency, update_pass: UpdatePassword):
     if user is None:
-        raise HTTPException(status_code= 401, detail='Failed Authentication')
+        raise HTTPException(status_code=401, detail="Failed Authentication")
 
-    find = db.query(Users).filter(Users.id == user.get('id')).first()
+    find = db.query(Users).filter(Users.id == user.get("id")).first()
+    if find is None:
+        raise HTTPException(status_code=404, detail="User Not Found")
 
-    if not bcrypt_context.verify(update_pass.current_password,find.hash_password):
-        raise HTTPException(status_code= 401, detail='Wrong Password')
+    if not bcrypt_context.verify(update_pass.current_password, find.hash_password):
+        raise HTTPException(status_code=401, detail="Wrong Password")
 
     find.hash_password = bcrypt_context.hash(update_pass.new_password)
     db.commit()
-    return JSONResponse(status_code=200, content= {'message' : 'Password Updated Sucessfully'})
+    return JSONResponse(status_code=200, content={"message": "Password Updated Successfully"})
 
 
-@route.post('/forgot-password')
-def forgot_password(db: db_dependancey, body: ForgotPassword):
+@route.post("/forgot-password")
+def forgot_password(db: db_dependency, body: ForgotPassword):
     user = db.query(Users).filter(Users.email == body.email).first()
     if user is None:
-        return JSONResponse(status_code= 200, content= {'message' : 'If the email exists, a reset link has been sent.'})
+        return JSONResponse(
+            status_code=200,
+            content={"message": "If the email exists, a reset link has been sent."},
+        )
 
     token = secrets.token_urlsafe(32)
     user.reset_token = token
-    user.reset_token_expiry = datetime.now() + timedelta(minutes= RESET_TOKEN_EXPIRE_MINUTES)
+    user.reset_token_expiry = datetime.now() + timedelta(minutes=RESET_TOKEN_EXPIRE_MINUTES)
     db.commit()
 
-    return JSONResponse(status_code= 200, content= {'message' : 'If the email exists, a reset link has been sent.', 'reset_token' : token})
-
-
-@route.post("/reset-password")
-def reset_password(data: ResetPasswordRequest, db: Session = Depends(get_db)):
-    try:
-        payload = decode_token(data.token)
-        if payload.get("type") != "password_reset":
-            raise HTTPException(400, "Invalid reset token")
-        user = db.query(User).filter(User.id == payload.get("id")).first()
-        if not user:
-            raise HTTPException(404, "User not found")
-        user.hashed_password = hash_password(data.new_password)
-        db.commit()
-        return {"message": "Password reset successful"}
-    except JWTError:
-        raise HTTPException(status_code=400, detail={"Invalid or expired reset token"})
-
+    return JSONResponse(
+        status_code=200,
+        content={
+            "message": "If the email exists, a reset link has been sent.",
+            "reset_token": token,
+        },
+    )

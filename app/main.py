@@ -1,8 +1,9 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
 from app import models
 from app.database import engine
-from app.routers import auth,admin,parcels,tracking
-from fastapi.middleware.cors import CORSMiddleware
+from app.routers import admin, auth, parcels, tracking
 
 app = FastAPI(title="Courier & Logistics Management Backend")
 
@@ -14,22 +15,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-models.Base.metadata.create_all(bind = engine)
-app.include_router(auth.route)
-app.include_router(admin.route)
-app.include_router(parcels.router)
-app.include_router(tracking.router)
+models.Base.metadata.create_all(bind=engine)
+
+for router in (auth.route, admin.route, parcels.router, tracking.router):
+    app.include_router(router)
 
 
-@app.get('/')
+@app.get("/")
 def hello():
-    return 'Welcome "Courier & Logistics Management Platform"'
+    return "Welcome \"Courier & Logistics Management Platform\""
 
-@app.get('/health')
+
+@app.get("/health")
 def health():
-    return {'status' : 'Ok'}
-
-
-
-
-
+    return {"status": "ok"}
